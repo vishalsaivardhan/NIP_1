@@ -1,9 +1,15 @@
 import 'dart:convert';
 import 'dart:math';
+// dart:typed_data not required here
 import 'package:uuid/uuid.dart';
 import '../../data/local/database.dart';
 import '../../models/transaction_model.dart';
 import '../security/identity_service.dart';
+import '../crypto/crypto_service.dart';
+import '../crypto/key_service.dart';
+
+final _crypto = CryptoService();
+final _keyService = KeyService();
 
 class TransactionService {
   final AppDatabase _db = AppDatabase.instance;
@@ -13,7 +19,26 @@ class TransactionService {
     final txId = const Uuid().v4();
     final sender = await _identity.getOrCreateDeviceId();
     final now = DateTime.now();
+    // Build payload
+    final payload = {
+      'transactionId': txId,
+      'sender': sender,
+      'receiver': receiverDeviceId,
+      'amount': amount,
+      'createdAt': now.toIso8601String(),
+    };
+
+    final payloadBytes = utf8.encode(jsonEncode(payload));
+
+    // Sign payload
+    final signatureBytes = await _identity.sign(payloadBytes);
+    final signatureB64 = base64Encode(signatureBytes);
+
+    // Encrypt payload with device AES key (prototype)
+    final aesKey = await _keyService.getOrCreateAesKey();
     final nonce = List<int>.generate(12, (_) => Random.secure().nextInt(256));
+    final encrypted = await _crypto.encrypt(aesKey, nonce, payloadBytes);
+    final encryptedB64 = base64Encode(encrypted);
 
     final tx = TransactionModel(
       transactionId: txId,
@@ -24,6 +49,8 @@ class TransactionService {
       nonce: base64Encode(nonce),
       ttl: 10,
       status: 'CREATED',
+      signature: signatureB64,
+      encryptedPayload: encryptedB64,
     );
 
     final db = await _db.database;
