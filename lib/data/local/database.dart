@@ -44,6 +44,20 @@ class AppDatabase {
           hopCount INTEGER
         )
       ''');
+      await db.execute('''
+        CREATE TABLE packets (
+          packetId TEXT PRIMARY KEY,
+          transactionId TEXT,
+          source TEXT,
+          destination TEXT,
+          packetType TEXT,
+          encryptedPayload TEXT,
+          ttl INTEGER,
+          hopCount INTEGER,
+          firstSeenAt INTEGER,
+          forwardedAt INTEGER
+        )
+      ''');
     });
   }
 }

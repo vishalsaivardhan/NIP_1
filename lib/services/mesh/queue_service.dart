@@ -2,6 +2,7 @@ import 'dart:async';
 import 'package:uuid/uuid.dart';
 import '../transaction/transaction_service.dart';
 import '../ble/ble_service.dart';
+import 'packet_processor.dart';
 import '../../models/packet_model.dart';
 import '../security/identity_service.dart';
 
@@ -12,6 +13,8 @@ class QueueService {
   void startPoll([Duration interval = const Duration(seconds: 5)]) {
     _timer?.cancel();
     _timer = Timer.periodic(interval, (_) => _tryForwardPending());
+    // Ensure packet processor is running to handle incoming packets
+    PacketProcessor.instance.start();
   }
 
   void stop() {
