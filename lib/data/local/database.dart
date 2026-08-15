@@ -1,42 +1,41 @@
-import 'package:drift/drift.dart';
-import 'package:drift/native.dart';
+import 'dart:io';
 import 'package:path/path.dart' as p;
 import 'package:path_provider/path_provider.dart';
-import 'dart:io';
+import 'package:sqflite/sqflite.dart';
 
-part 'database.g.dart';
+class AppDatabase {
+  static final AppDatabase instance = AppDatabase._();
+  AppDatabase._();
 
-class Devices extends Table {
-  TextColumn get id => text()();
-  TextColumn get nodeType => text().nullable()();
-  IntColumn get rssi => integer().nullable()();
-  @override
-  Set<Column> get primaryKey => {id};
-}
+  Database? _db;
 
-class Transactions extends Table {
-  TextColumn get transactionId => text()();
-  TextColumn get senderDeviceId => text()();
-  TextColumn get receiverDeviceId => text()();
-  IntColumn get amount => integer()();
-  DateTimeColumn get createdAt => dateTime()();
-  TextColumn get status => text()();
-  @override
-  Set<Column> get primaryKey => {transactionId};
-}
+  Future<Database> get database async {
+    if (_db != null) return _db!;
+    _db = await _initDb();
+    return _db!;
+  }
 
-@DriftDatabase(tables: [Devices, Transactions])
-class AppDatabase extends _$AppDatabase {
-  AppDatabase() : super(_openConnection());
-
-  @override
-  int get schemaVersion => 1;
-}
-
-LazyDatabase _openConnection() {
-  return LazyDatabase(() async {
-    final dbFolder = await getApplicationDocumentsDirectory();
-    final file = File(p.join(dbFolder.path, 'nip.sqlite'));
-    return NativeDatabase(file);
-  });
+  Future<Database> _initDb() async {
+    final dir = await getApplicationDocumentsDirectory();
+    final path = p.join(dir.path, 'nip.sqlite');
+    return await openDatabase(path, version: 1, onCreate: (db, version) async {
+      await db.execute('''
+        CREATE TABLE devices (
+          id TEXT PRIMARY KEY,
+          nodeType TEXT,
+          rssi INTEGER
+        )
+      ''');
+      await db.execute('''
+        CREATE TABLE transactions (
+          transactionId TEXT PRIMARY KEY,
+          senderDeviceId TEXT,
+          receiverDeviceId TEXT,
+          amount INTEGER,
+          createdAt INTEGER,
+          status TEXT
+        )
+      ''');
+    });
+  }
 }

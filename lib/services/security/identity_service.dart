@@ -1,8 +1,7 @@
 import 'dart:convert';
-import 'dart:typed_data';
+import 'dart:math';
 import 'package:cryptography/cryptography.dart';
 import 'package:uuid/uuid.dart';
-import '../crypto/crypto_service.dart';
 import 'secure_storage.dart';
 
 class IdentityService {
@@ -22,23 +21,12 @@ class IdentityService {
   }
 
   Future<void> generateAndStoreKeypair() async {
-    final keyPair = await _signAlgorithm.newKeyPair();
+    // Generate a 32-byte seed and derive the ed25519 keypair from it.
+    final seed = List<int>.generate(32, (_) => Random.secure().nextInt(256));
+    final keyPair = await _signAlgorithm.newKeyPairFromSeed(seed);
     final publicKey = await keyPair.extractPublicKey();
-    // Attempt to extract private key bytes
-    final privateKeyBytes = await _extractPrivateKeyBytes(keyPair);
-    await _storage.write(_privateKeyKey, base64Encode(privateKeyBytes));
+    await _storage.write(_privateKeyKey, base64Encode(seed));
     await _storage.write(_publicKeyKey, base64Encode(publicKey.bytes));
-  }
-
-  Future<Uint8List> _extractPrivateKeyBytes(KeyPair keyPair) async {
-    try {
-      // SimpleKeyPair has extractPrivateKeyBytes in some versions
-      final data = await keyPair.extractPrivateKeyBytes();
-      return Uint8List.fromList(data);
-    } catch (_) {
-      // Fallback: try to export via algorithm-specific API
-      throw StateError('Unable to extract private key bytes on this platform/version');
-    }
   }
 
   Future<String?> getPublicKeyBase64() => _storage.read(_publicKeyKey);
@@ -57,12 +45,9 @@ class IdentityService {
       throw StateError('Keypair not found');
     }
     final privBytes = base64Decode(priv);
-    final pubBytes = base64Decode(pub);
-    return SimpleKeyPairData(
-      privBytes,
-      publicKey: SimplePublicKey(pubBytes, type: KeyPairType.ed25519),
-      type: KeyPairType.ed25519,
-    );
+    // Recreate keypair from seed
+    final keyPair = await _signAlgorithm.newKeyPairFromSeed(privBytes);
+    return keyPair;
   }
 
   Future<List<int>> sign(List<int> data) async {

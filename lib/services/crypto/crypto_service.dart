@@ -15,18 +15,35 @@ class CryptoService {
   }
 
   Future<Uint8List> encrypt(SecretKey key, List<int> nonce, List<int> plaintext, {List<int>? aad}) async {
-    final secretBox = await algorithm.encrypt(
-      plaintext,
-      secretKey: key,
-      nonce: nonce,
-      aad: aad,
-    );
-    return Uint8List.fromList(secretBox.concatenation());
+    SecretBox secretBox;
+    if (aad != null) {
+      secretBox = await algorithm.encrypt(
+        plaintext,
+        secretKey: key,
+        nonce: nonce,
+        aad: aad,
+      );
+    } else {
+      secretBox = await algorithm.encrypt(
+        plaintext,
+        secretKey: key,
+        nonce: nonce,
+      );
+    }
+    final concat = secretBox.concatenation();
+    return Uint8List.fromList(concat ?? <int>[]);
   }
 
   Future<List<int>> decrypt(SecretKey key, List<int> data, List<int> nonce, {List<int>? aad}) async {
-    final secretBox = SecretBox(data.sublist(0, data.length - 16), nonce: nonce, mac: Mac(data.sublist(data.length - 16)));
-    final plaintext = await algorithm.decrypt(secretBox, secretKey: key, aad: aad);
+    final macBytes = data.sublist(data.length - 16);
+    final cipherText = data.sublist(0, data.length - 16);
+    final secretBox = SecretBox(cipherText, nonce: nonce, mac: Mac(macBytes));
+    final List<int> plaintext;
+    if (aad != null) {
+      plaintext = await algorithm.decrypt(secretBox, secretKey: key, aad: aad);
+    } else {
+      plaintext = await algorithm.decrypt(secretBox, secretKey: key);
+    }
     return plaintext;
   }
 }
