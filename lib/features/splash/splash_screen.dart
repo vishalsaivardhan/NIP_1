@@ -1,11 +1,24 @@
 import 'package:flutter/material.dart';
 
-class SplashScreen extends StatelessWidget {
+class SplashScreen extends StatefulWidget {
   const SplashScreen({super.key});
 
   @override
+  State<SplashScreen> createState() => _SplashScreenState();
+}
+
+class _SplashScreenState extends State<SplashScreen> {
+  @override
+  void initState() {
+    super.initState();
+    Future.delayed(const Duration(seconds: 1), () {
+      if (!mounted) return;
+      Navigator.pushReplacementNamed(context, '/onboarding');
+    });
+  }
+
+  @override
   Widget build(BuildContext context) {
-    Future.delayed(const Duration(seconds: 1), () => Navigator.pushReplacementNamed(context, '/onboarding'));
     return const Scaffold(
       body: Center(child: Text('ProxiUPI — Splash')),
     );
