@@ -1,9 +1,16 @@
 import 'dart:async';
 
+import 'dart:convert';
+// dart:typed_data not required
+
+import 'package:cryptography/cryptography.dart';
+
 import '../../data/local/database.dart';
 import '../../models/packet_model.dart';
 import '../ble/ble_service.dart';
 import '../security/identity_service.dart';
+import '../crypto/crypto_service.dart';
+import '../crypto/key_service.dart';
 
 class PacketProcessor {
   static final PacketProcessor instance = PacketProcessor._();
@@ -12,6 +19,8 @@ class PacketProcessor {
   StreamSubscription? _sub;
   final AppDatabase _db = AppDatabase.instance;
   final IdentityService _identity = IdentityService();
+  final CryptoService _crypto = CryptoService();
+  final KeyService _keyService = KeyService();
 
   Future<void> start() async {
     if (_sub != null) return;
@@ -58,22 +67,52 @@ class PacketProcessor {
       final me = await _identity.getOrCreateDeviceId();
 
       if (p.destination == me) {
-        // Store as received transaction (encrypted payload retained)
+        // Attempt to decrypt and verify signature if fields present
+        String status = 'RECEIVED';
+        int amount = 0;
+        String? signatureB64 = p.signature;
+        try {
+          if (p.nonce != null && p.encryptedPayload.isNotEmpty) {
+            final secretKey = await _keyService.getOrCreateAesKey();
+            final encryptedBytes = base64Decode(p.encryptedPayload);
+            final nonceBytes = base64Decode(p.nonce!);
+            final plain = await _crypto.decrypt(secretKey, encryptedBytes, nonceBytes);
+            final payloadJson = utf8.decode(plain);
+            final payload = jsonDecode(payloadJson) as Map<String, dynamic>;
+            amount = (payload['amount'] as int?) ?? 0;
+
+            // Verify signature if sender public key and signature available
+            if (p.senderPublicKey != null && signatureB64 != null) {
+              final sigBytes = base64Decode(signatureB64);
+              final pubBytes = base64Decode(p.senderPublicKey!);
+              final pubKey = SimplePublicKey(pubBytes, type: KeyPairType.ed25519);
+              final isValid = await _crypto.signatureAlgorithm.verify(
+                plain,
+                signature: Signature(sigBytes, publicKey: pubKey),
+              );
+              status = isValid ? 'VERIFIED' : 'INVALID_SIGNATURE';
+            }
+          }
+        } catch (e) {
+          // decryption or verification failed; keep as RECEIVED
+          status = 'RECEIVED_ERROR';
+        }
+
         final db = await _db.database;
         await db.insert('transactions', {
           'transactionId': p.transactionId,
           'senderDeviceId': p.source,
           'receiverDeviceId': p.destination,
-          'amount': 0,
+          'amount': amount,
           'currency': 'INR',
           'createdAt': DateTime.now().millisecondsSinceEpoch,
           'expiresAt': null,
-          'nonce': null,
+          'nonce': p.nonce,
           'counter': null,
-          'signature': null,
+          'signature': signatureB64,
           'encryptedPayload': p.encryptedPayload,
           'ttl': p.ttl,
-          'status': 'RECEIVED',
+          'status': status,
           'hopCount': p.hopCount,
         });
         return;

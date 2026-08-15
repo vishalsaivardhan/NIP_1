@@ -36,6 +36,7 @@ class QueueService {
     for (final tx in pending) {
       await _txService.markAsQueued(tx.transactionId);
 
+      final senderPub = await identity.getPublicKeyBase64();
       final packet = PacketModel(
         packetId: idGen.v4(),
         transactionId: tx.transactionId,
@@ -44,6 +45,9 @@ class QueueService {
         ttl: tx.ttl,
         packetType: 'TRANSACTION',
         encryptedPayload: tx.encryptedPayload ?? '',
+        signature: tx.signature,
+        senderPublicKey: senderPub,
+        nonce: tx.nonce,
         hopCount: tx.hopCount,
       );
 
