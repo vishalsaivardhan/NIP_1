@@ -1,6 +1,9 @@
 import 'dart:async';
+import 'package:uuid/uuid.dart';
 import '../transaction/transaction_service.dart';
 import '../ble/ble_service.dart';
+import '../../models/packet_model.dart';
+import '../security/identity_service.dart';
 
 class QueueService {
   final TransactionService _txService = TransactionService();
@@ -23,11 +26,30 @@ class QueueService {
     final bleAvailable = await BleService.isBluetoothAvailable();
     if (!bleAvailable) return;
 
+    final idGen = const Uuid();
+    final identity = IdentityService();
+    final sourceId = await identity.getOrCreateDeviceId();
+
     for (final tx in pending) {
-      // For prototype, mark as QUEUED and then FORWARDED locally.
       await _txService.markAsQueued(tx.transactionId);
-      // Placeholder for real forwarding via BLE; mark forwarded.
-      await _txService.markAsForwarded(tx.transactionId);
+
+      final packet = PacketModel(
+        packetId: idGen.v4(),
+        transactionId: tx.transactionId,
+        source: sourceId,
+        destination: tx.receiverDeviceId,
+        ttl: tx.ttl,
+        packetType: 'TRANSACTION',
+        encryptedPayload: tx.encryptedPayload ?? '',
+        hopCount: tx.hopCount,
+      );
+
+      try {
+        await BleService.sendPacket(packet);
+        await _txService.markAsForwarded(tx.transactionId);
+      } catch (e) {
+        // sending failed; leave as QUEUED for next attempt
+      }
     }
   }
 }
