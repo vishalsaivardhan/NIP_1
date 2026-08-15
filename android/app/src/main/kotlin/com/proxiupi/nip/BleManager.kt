@@ -2,6 +2,7 @@ package com.proxiupi.nip
 
 import android.content.Context
 import android.util.Log
+import io.flutter.plugin.common.EventChannel
 
 class BleManager(private val context: Context) {
 
@@ -55,5 +56,21 @@ class BleManager(private val context: Context) {
     fun disconnect(deviceId: String) {
         Log.d("BleManager", "disconnect from $deviceId")
         // TODO: implement disconnect
+    }
+
+    // Event sink will be populated by MainActivity when Flutter listens
+    companion object {
+        var eventSink: EventChannel.EventSink? = null
+    }
+
+    fun sendPacket(packetJson: String) {
+        Log.d("BleManager", "sendPacket: $packetJson")
+        // TODO: send over GATT/characteristic
+        // For prototype, echo back after a short delay via eventSink
+        eventSink?.success(packetJson)
+    }
+
+    fun simulateIncoming(packetJson: String) {
+        eventSink?.success(packetJson)
     }
 }
