@@ -1,4 +1,4 @@
-import 'dart:io';
+// dart:io not required directly; kept for future use
 import 'package:path/path.dart' as p;
 import 'package:path_provider/path_provider.dart';
 import 'package:sqflite/sqflite.dart';
@@ -32,8 +32,16 @@ class AppDatabase {
           senderDeviceId TEXT,
           receiverDeviceId TEXT,
           amount INTEGER,
+          currency TEXT,
           createdAt INTEGER,
-          status TEXT
+          expiresAt INTEGER,
+          nonce TEXT,
+          counter INTEGER,
+          signature TEXT,
+          encryptedPayload TEXT,
+          ttl INTEGER,
+          status TEXT,
+          hopCount INTEGER
         )
       ''');
     });
